@@ -15,7 +15,6 @@ order: 4
 
 | 구분 | 정보 |
 | :--- | :--- |
-| 생년 | 2000년생 |
 | 석사 과정 | 2025년 ~ (재학 중) - 동국대학교 |
 | 학사 과정 | 2019년 ~ 2024년 (졸업) - 창원대학교 |
 | 주요 관심 분야 |"Linux Kernel, Storage Systems, C/C++ Programming" |
@@ -29,5 +28,3 @@ order: 4
 2025.05	|RFUSE의 성능 개선을 위한 N-way 스케줄링 기법	|2저자	|저널	|[링크](https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE12167215)
 2025.03	|대규모 학술 데이터셋을 활용한 문맥 학습 기반 학술 참고문헌 추천 시스템	|1저자	|저널	|[링크](https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE12123555)
 2023.05	|FastText 단어 유사도 기반의 협업 필터링 논문 추천 시스템	|1저자	|컨퍼런스	|[링크](https://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE11415339)
-
-테스트
