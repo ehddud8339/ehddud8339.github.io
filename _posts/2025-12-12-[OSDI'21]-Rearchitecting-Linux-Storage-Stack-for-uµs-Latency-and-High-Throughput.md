@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "논문 리뷰 - [OSDI'21] Rearchitecting Linux Storage Stack for µs Latency and High Throughput"
-date: 2025-12-12 23:00:00 +0900
+date: 2026-01-26 23:00:00 +0900
 categories: [Linux, File system]
 tags: [SSD, Block Layer, Congestion Control]
 ---
@@ -35,13 +35,12 @@ Blk-switch는 **Linux Per-core Block Multi-queues 구조**와 **Network Switch**
 ![Figure 4](../assets/img/posts/2025-12-12/Figure4.png)
 *Figure 4*는 Blk-switch의 아키텍처와 **주요 동작 1, 2, 3번을 나타낸다.**
 
-### Block Layer is the New Switch**
+### Block Layer is the New Switch
 오늘 날의 Linux Block Multi-queues 구조는 Per-core 마다 Device Queues와 1:1로 매핑된다. 이러한 구조로 인해 한 코어에서 여러 애플리케이션이 동작할 경우 HoL 문제가 발생할 수 있다.
 저자들은 이를 해결하기 위해 **Multiple Egress Queues** 구조와 **Decoupling Request Processing from Application Cores** 기법을 도입했다.
 - **Multiple Egress Queues**:
     - 요청을 다른 Device Core로 전달할 수 있다고 하여도 Software Queue가 하나라면 동일 CPU의 App들의 요청에서 HoL이 발생할 수 있다.
     - 이를 해결하기 위해 **App Class마다 Egress Queue를 생성**하여, 각 Egress Queue에는 동일 Class의 요청만 삽입하도록 한다.
-        - App Class를 어떻게 구분하지?
     - CPU Scheduler는 Application의 성능 목표(Latency | Throughput)에 따라 **우선순위**를 할당하여 L-apps의 요청이 먼저 처리되도록 한다.
 - **Decoupling Request Processing from Application Cores**:
     - Linux Block Multi-queues는 CPU와 Device Queues와 1:1로 매핑되기 때문에 **Core를 효율적으로 사용하지 못하는 경우**가 생긴다.
@@ -49,10 +48,27 @@ Blk-switch는 **Linux Per-core Block Multi-queues 구조**와 **Network Switch**
     - 이를 방지하기 위해 C0의 Egress Queue에서 Deque된 요청을 다른 Core의 Device Queue에 삽입하고, 응답을 원래의 Core(C0)로 반환되게 한다.
 
 ### Request Steering
-**Request Steering**은 위와 같은 구조를 활용하여 다음과 같은 상황에서 발생하는 부하를 효율적으로 분산하는 알고리즘이다.
-- 다수의 L-apps 요청으로 인해 모든 CPU Cycle을 점유하는 상황
-- 하나의 코어에서 여러 L-apps가 동시에 요청을 제출하는 상황
-- 하나의 T-app의 큰 요청으로 인해 HoL이 발생하는 상황 등
+**Request Steering**은 일시적인 부하(Transient Load)를 처리하기 위해 설계되었다. T-app의 요청이 발생했을 때, 로컬 코어의 부하가 임계치보다 낮다면 해당 코어의 Egress Queue에 요청을 삽입한다. 만약 로컬 코어가 혼잡하다면, **Power-of-two Choices** 알고리즘을 사용하여 다른 코어 중 무작위로 두 개의 후보를 선정하고, 그 중 부하가 더 적은 코어로 요청을 스티어링한다.
+- **부하 측정 기준**: T-app은 주로 I/O가 병목이므로, **Egress Queue에 대기 중인 요청들의 총 바이트 수**를 기준으로 부하를 측정한다.
+- **응답 처리**: 다른 코어로 스티어링된 요청이 완료되면, Linux Block Layer의 태그 정보를 활용하여 원래 요청을 보낸 `kioctx`(Kernel I/O Context)를 찾아 응답을 올바르게 반환한다.
 
-위와 같은 상황에서 **T-apps의 요청을 다른 Device Ingress Queue로 전달하여 HoL을 방지한다.**
-- 이 과정에서 발생하는 
+### Application Steering
+Request Steerring이 요청 단위의 부하 분산이라면, **Application Steering**은 **지속적인 부하**를 해결하기 위해 스레드 단위로 CPU 자원을 재할당하는 기법이다.
+- **동작 방식**: 특정 코어에서 L-apps와 T-apps 간의 경합이 지속적으로 감지되면, **Coarse-grained timescale**(기본 10ms) 주기로 동작하여 T-app 스레드 자체를 유후 코어로 이동시킨다.
+- **구현**: Linux 커널의 `sched_setaffinity` 함수를 사용하여 실행 중인 스레드를 물리적으로 다른 코어로 마이그레이션한다.
+- **가중치 기반 부하 계산**: L-apps와 T-apps의 간섭을 최소화하기 위해 **Weighted Average Load**를 계산하여, T-app을 L-app의 부하가 적은 코어로 이동시킨다.
+
+### Evaluation
+저자들은 100Gbps 네트워크 환경에서 Linux, SPDK, Blk-switch의 성능을 비교 분석하였다. 실험은 In-memory Storage와 NVMe SSD 환경에서 진행되었으며, 주요 결과는 다음과 같다.
+
+1. **L-apps의 Latency 유지**:
+    - 다수의 L-apps와 T-apps가 경쟁하는 상황에서, Blk-switch는 Linux 대비 **평균 Latency를 최대 130배, P99 Tail Latency를 최대 25배 개선**하였다.
+    - SPDK와 비교했을 때도 P99.9 Tail Latency에서 **33~101배 더 우수한 성능**을 보였다. 이는 SPDK의 폴링 방식이 CFS 스케줄러와 충돌하여 발생하는 문제를 해결했기 때문이다.
+2. **T-apps의 Throughput 보장**:
+    - Blk-switch는 Linux의 Throughput 대비 약 **84~100% 수준을 유지**하며, 하드웨어 대역폭을 거의 포화 상태까지 활용할 수 있게 한다.
+    - Request Sterring 오버헤드로 인해 5~10%의 Throughput 손실이 발생할 수 있지만, us 단위의 Latency 보장을 고려하면 합리적인 Trade-off 관계라고 한다.
+3. **확장성**:
+    - 코어 수를 늘려감에 따라 Blk-switch는 선형적인 Throughput 증가를 보였으며, NUMA 노드를 넘나드는 환경에서도 안정적인 성능을 유지했다.
+
+### Conclusion
+저자들은 Linux 커널의 스토리지 스택을 **Network Switch** 아키텍처와 유사하게 재설계하여 어플리케이션이나 하드웨어 수정 없이도 **us 수준의 Latency와 높은 Throughput**을 동시에 달성하였다.

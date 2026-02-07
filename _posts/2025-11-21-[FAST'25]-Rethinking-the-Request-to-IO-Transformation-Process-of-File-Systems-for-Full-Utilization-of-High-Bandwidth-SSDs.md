@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "논문 리뷰 - [FAST'25] Rethinking the Request-to-IO Transformation Process of File Systems for Full Utilization of High-Bandwidth SSDs"
-date: 2025-11-21 23:00:00 +0900
+date: 2026-01-25 23:00:00 +0900
 categories: [Linux, File system]
 tags: [SSD, NVM, Heterogenous system]
 ---
