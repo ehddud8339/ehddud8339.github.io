@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "논문 리뷰 - [FAST'26] Rearchitecting Buffered I/O in the Era of High-Bandwidth SSDs"
-date: 2026-01-26 23:00:00 +0900
+date: 2026-02-07 12:00:00 +0900
 categories: [Linux, I/O Stack]
 tags: [SSD, Buffered I/O, Direct I/O]
 ---
